@@ -8,10 +8,10 @@
 #include <glm/glm.hpp>
 #include "debug.h"
 #include "FreeCam.h"
-// #include <windows.h>
-// extern "C" {
-// 	_declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
-// }
+#include <windows.h>
+extern "C" {
+	_declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+}
 
 
 SDL_Window* initScreen(int width, int height) {
@@ -101,8 +101,7 @@ int main(int argc, char* argv[])
 	glBindBuffer(GL_ARRAY_BUFFER, VBO);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-	// how openGL should interpret the data we sent
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void *)0);
 	glEnableVertexAttribArray(0);
 
 	glBindVertexArray(0);

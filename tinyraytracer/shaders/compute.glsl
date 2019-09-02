@@ -151,14 +151,19 @@ bool sceneIntersect(vec3 orig, vec3 dir, out vec3 normal, out vec3 hitpoint, out
 	vec3 outHit;
 	Material outMat;
 
-	float dist = 0;
+	float dist = 1e10;
 	bool found = false;
+
+	float hitdist = 0.0;
 
 	for (int i = 0; i < SPHERE_COUNT; i++) {
 		if (hitSphere(spheres[i], orig, dir, outNormal, outHit, outMat)) {
 			found = true;
+
 			// depth testing plz
-			if (distance(orig, outHit) > dist) {
+			hitdist = distance(orig, outHit);
+			if (hitdist < dist) {
+				dist = hitdist;
 				normal = outNormal;
 				hitpoint = outHit;
 				mat = outMat;
@@ -170,7 +175,10 @@ bool sceneIntersect(vec3 orig, vec3 dir, out vec3 normal, out vec3 hitpoint, out
 		if (hitPlane(planes[i], orig, dir, outNormal, outHit, outMat)) {
 			found = true;
 
-			if (distance(orig, outHit) > dist) {
+			// depth testing plz
+			hitdist = distance(orig, outHit);
+			if (hitdist < dist) {
+				dist = hitdist;
 				normal = outNormal;
 				hitpoint = outHit;
 				mat = outMat;
@@ -182,6 +190,8 @@ bool sceneIntersect(vec3 orig, vec3 dir, out vec3 normal, out vec3 hitpoint, out
 }
 
 bool castRay(vec3 orig, vec3 dir, out vec3 outColor, out vec3 hitpoint, out vec3 normal, out Material mat) {
+
+	outColor = vec3(0.0);
 
 	if (!sceneIntersect(orig, dir, normal, hitpoint, mat)) {
 		outColor = vec3(0.0, 0.34, 0.72);
@@ -232,6 +242,7 @@ vec3 recursiveRayCast(vec3 orig, vec3 dir) {
 		vec3 hitpoint;
 		vec3 normal;
 		Material mat;
+		vec3 col;
 
 		bool res = castRay(data[i].orig, data[i].dir, data[i].retColor, hitpoint, normal, mat);
 		data[i].finished = true;
@@ -312,6 +323,11 @@ void main() {
 	d = cameraOrientation * normalize(d);
 
 	vec4 pixelColor = vec4(0.0, 0.0, 0.0, 1.0);
+
+	vec3 pt, norm;
+	Material mat;
+
+	//castRay(p, d, pixelColor.rgb, pt, norm, mat);
 
 	pixelColor.rgb = recursiveRayCast(p, d);
 
