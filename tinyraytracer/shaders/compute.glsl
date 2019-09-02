@@ -7,6 +7,8 @@ layout(rgba32f, binding = 0) uniform image2D outTexture;
 uniform vec3 cameraPosition;
 uniform mat3 cameraOrientation;
 
+layout (binding = 1) uniform samplerCube skybox;
+
 // CONTS
 
 const float FOV = 3.14 / 2;
@@ -15,11 +17,13 @@ const int MAX_DEPTH = 4;
 
 // DATA DEFINITIONS
 
+/* Stack data structure */
 struct Stack {
 	int data[15]; // -1: a tree of depth N has 2^N - 1 elements
 	int head;
 };
 
+/* Simple material */
 struct Material {
 	vec3 color;
 	float reflectivity;
@@ -27,13 +31,13 @@ struct Material {
 	float specularExponent;
 };
 
+/* Emulates a stack record */
 struct FunData {
 	// params
 	int index;
 	vec3 orig;
 	vec3 dir;
 	int depth;
-
 
 	// local vars
 	Material mat;
@@ -72,6 +76,8 @@ Light lights[LIGHT_COUNT];
 
 // FUNCTION DEFINITIONS
 
+// stack funcitons
+
 Stack createStack() {
 	Stack s;
 	s.head = -1;
@@ -95,6 +101,10 @@ int top(Stack s) {
 bool empty(Stack s) {
 	return s.head < 0;
 }
+
+// -----
+
+// hit testing
 
 bool hitSphere(Sphere sphere, vec3 orig, vec3 dir, out vec3 normal, out vec3 hitpoint, out Material mat) {
 	vec3 e = sphere.center - orig;
@@ -189,32 +199,46 @@ bool sceneIntersect(vec3 orig, vec3 dir, out vec3 normal, out vec3 hitpoint, out
 	return found;
 }
 
+/* Cast a ray and if something is hit calculates and returns its color according to the lights in the scene */
 bool castRay(vec3 orig, vec3 dir, out vec3 outColor, out vec3 hitpoint, out vec3 normal, out Material mat) {
 
 	outColor = vec3(0.0);
 
 	if (!sceneIntersect(orig, dir, normal, hitpoint, mat)) {
-		outColor = vec3(0.0, 0.34, 0.72);
+		outColor = texture(skybox, dir).rgb;
 		return false;
 	}
 
 	for (int i = 0; i < LIGHT_COUNT; i++) {
 		Light light = lights[i];
 
+		// diffuse component
 		vec3 rayToLight = normalize(light.position - hitpoint);
-
 		outColor += mat.color * light.color * max(0.0, dot(normal, rayToLight));
 
+		// specular component
 		vec3 rayToCamera = normalize(orig - hitpoint);
 		float specularFactor = max(0.0, dot(rayToCamera, -reflect(rayToLight, normal)));
-
-
 		outColor += light.color * pow(specularFactor, mat.specularExponent);
+
+		// shadows if something is hit in the path from the hitpoint to the light then this point is in shadow
+		vec3 shadowOrigin = hitpoint + normal * 1e-3 * sign(dot(rayToLight, normal));
+		vec3 hitpt, norm;
+		Material m;
+		bool hit = sceneIntersect(shadowOrigin, rayToLight, norm, hitpt, m);
+		if (hit)
+			outColor *= 0.8;
 	}
 	
 	return true;
 }
 
+/* Emulates a recursive function. For each ray that is cast
+* two more rays (reflected and refracted) are generated. This
+* creates a tree-like data structure in which the color generated
+* by the first ray depends on the colors of the children rays.
+* This tree can be flattened as in max/min heap data structures. 
+* the flattened tree can then be explored with an iterative algorithm. */
 vec3 recursiveRayCast(vec3 orig, vec3 dir) {
 
 	Stack s = createStack();
@@ -244,11 +268,11 @@ vec3 recursiveRayCast(vec3 orig, vec3 dir) {
 		Material mat;
 		vec3 col;
 
-		bool res = castRay(data[i].orig, data[i].dir, data[i].retColor, hitpoint, normal, mat);
+		bool hit = castRay(data[i].orig, data[i].dir, data[i].retColor, hitpoint, normal, mat);
 		data[i].finished = true;
 
 		// nothing was hit, return value is already in place, no need to trace more rays!
-		if (!res) {
+		if (!hit) {
 			pop(s);
 			continue;
 		}
@@ -259,8 +283,8 @@ vec3 recursiveRayCast(vec3 orig, vec3 dir) {
 			vec3 reflected = normalize(reflect(data[i].dir, normal));
 			vec3 refracted = normalize(refract(data[i].dir, normal, 1.0 / 1.52));
 
-			vec3 reflectedOrigin = hitpoint + normal * 1e-3 * dot(reflected, normal);
-			vec3 refractedOrigin = hitpoint + normal * 1e-3 * dot(refracted, normal);
+			vec3 reflectedOrigin = hitpoint + normal * 1e-3 * sign(dot(reflected, normal));
+			vec3 refractedOrigin = hitpoint + normal * 1e-3 * sign(dot(refracted, normal));
 
 			data[2 * i] = FunData(2 * i, reflectedOrigin, reflected, data[i].depth + 1, _emptyMaterial, false, vec3(0.0));
 			data[2 * i + 1] = FunData(2 * i + 1, refractedOrigin, refracted, data[i].depth + 1, _emptyMaterial, false, vec3(0.0));
@@ -272,9 +296,11 @@ vec3 recursiveRayCast(vec3 orig, vec3 dir) {
 	return data[1].retColor;
 }
 
-
+// -------
 
 void main() {
+	// Scene set-up
+
 	Material green = Material(vec3(0, 1, 0), 0.4, 0.7, 16);
 
 	Sphere s1;
@@ -301,17 +327,12 @@ void main() {
 
 	Light l2;
 	l2.color = vec3(1.0);
-	l2.position = vec3(-5, 0, -2);
+	l2.position = vec3(0, 5, -5);
 	lights[1] = l2;
 
+	// ray casting
 
-	Stack s = createStack();
-	push(s, 3);
-	push(s, 1);
-
-	int a = pop(s);
-
-    ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy); // [0, 0] -> [511, 511]
+    ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);
     ivec2 texSize = imageSize(outTexture);
 
     // ray origin
@@ -324,15 +345,10 @@ void main() {
 
 	vec4 pixelColor = vec4(0.0, 0.0, 0.0, 1.0);
 
-	vec3 pt, norm;
-	Material mat;
-
-	//castRay(p, d, pixelColor.rgb, pt, norm, mat);
-
 	pixelColor.rgb = recursiveRayCast(p, d);
 
 	// tone mapping
 	pixelColor.rgb = vec3(1.0) - exp(-pixelColor.rgb);
 
-    imageStore(outTexture, a * pixelCoords, pixelColor);
+    imageStore(outTexture, pixelCoords, pixelColor);
 }

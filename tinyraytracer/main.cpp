@@ -4,13 +4,15 @@
 #include <stdint.h>
 #include <cmath>
 #include "Shader.h"
+#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #include <glm/glm.hpp>
 #include "debug.h"
 #include "FreeCam.h"
-#include <windows.h>
+
+// use nvidia gpu if available
 extern "C" {
-	_declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+	_declspec(dllexport) unsigned long NvOptimusEnablement = 0x00000001;
 }
 
 
@@ -20,15 +22,13 @@ SDL_Window* initScreen(int width, int height) {
 		return nullptr;
 	}
 
-	SDL_GL_LoadLibrary(nullptr); // use default opengl
+	SDL_GL_LoadLibrary(nullptr); // use default OpenGL
 	SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
 	SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-	// Also request a depth buffer
 	SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-	SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-	SDL_Window* window = SDL_CreateWindow("opengl", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
+	SDL_Window* window = SDL_CreateWindow("tinyraytracer-openglcompute", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, width, height, SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL);
 	if (window == nullptr) {
 		std::cout << "cannot create window " << SDL_GetError() << "\n";
 		return nullptr;
@@ -50,9 +50,6 @@ SDL_Window* initScreen(int width, int height) {
 	glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);
 
 	glViewport(0, 0, width, height);
-	//glEnable(GL_BLEND);
-	//glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glEnable(GL_DEPTH_TEST);
 
 	return window;
 }
@@ -70,10 +67,41 @@ GLuint createTexture(int w, int h) {
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w, h, 0, GL_RGBA, GL_FLOAT, nullptr);
 
-
-	glBindImageTexture(0, texture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glBindTexture(GL_TEXTURE_2D, 0);
 
 	return texture;
+}
+
+GLuint createCubeMap() {
+	stbi_set_flip_vertically_on_load(false);
+
+	GLuint cubemap;
+	glGenTextures(1, &cubemap);
+
+	glBindTexture(GL_TEXTURE_CUBE_MAP, cubemap);
+	int width, height, numCh;
+	std::vector<std::string> images{ "right", "left", "top", "bottom", "back", "front" };
+	int i = 0;
+	for (const auto& img : images) {
+		std::uint8_t* data = stbi_load(("../data/" + img + ".tga").c_str(), &width, &height, &numCh, STBI_rgb_alpha);
+		if (data) {
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+			stbi_image_free(data);
+		}
+		else
+			std::cout << "unable to load texture " << img << "\n";
+
+		i++;
+	}
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+
+	return cubemap;
 }
 
 constexpr GLuint width = 1024;
@@ -111,7 +139,9 @@ int main(int argc, char* argv[])
 
 	Shader renderShader{ {{GL_COMPUTE_SHADER, "shaders/compute.glsl"}} };
 
+
 	GLuint outputTexture = createTexture(width, height);
+	GLuint skybox = createCubeMap();
 
 	bool quit = false;
 	SDL_Event e;
@@ -126,12 +156,17 @@ int main(int argc, char* argv[])
 		renderShader.use();
 		renderShader.setVec3("cameraPosition", cam.position);
 		renderShader.setMat3("cameraOrientation", cam.getLookAt());
+		glActiveTexture(GL_TEXTURE0);
+		glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, skybox);
+
 		glDispatchCompute(width / 16, height / 16, 1);
 
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-		glClearColor(0.0f, 1.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		
+		// no need to clear we are rendering a full screen texture
 
 		drawShader.use();
 		glBindVertexArray(VAO);
