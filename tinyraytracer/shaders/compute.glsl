@@ -29,6 +29,7 @@ struct Material {
 	float reflectivity;
 	float refractivity;
 	float specularExponent;
+	float refractiveRatio;
 };
 
 /* Emulates a stack record */
@@ -65,13 +66,13 @@ struct Light {
 	vec3 color;
 };
 
-const int SPHERE_COUNT = 2;
+const int SPHERE_COUNT = 4;
 Sphere spheres[SPHERE_COUNT];
 
 const int PLANE_COUNT = 1;
 Plane planes[PLANE_COUNT];
 
-const int LIGHT_COUNT = 2;
+const int LIGHT_COUNT = 3;
 Light lights[LIGHT_COUNT];
 
 // FUNCTION DEFINITIONS
@@ -148,7 +149,7 @@ bool hitPlane(Plane plane, vec3 orig, vec3 dir, out vec3 normal, out vec3 hitpoi
 	if (size.y < 0.01) size2 = size.xz;
 	if (size.z < 0.01) size2 = size.xy;
 
-	if (any(greaterThan(size2, vec2(5.0)))) return false;
+	if (any(greaterThan(size2, vec2(plane.size)))) return false;
 
 	normal = plane.normal;
 	mat = plane.mat;
@@ -244,7 +245,7 @@ vec3 recursiveRayCast(vec3 orig, vec3 dir) {
 	Stack s = createStack();
 	FunData data[16];
 
-	Material _emptyMaterial = Material(vec3(0.0), 0.0, 0.0, 0.0);
+	Material _emptyMaterial = Material(vec3(0.0), 0.0, 0.0, 0.0, 0.0);
 
 	push(s, 1);
 	data[1] = FunData(1, orig, dir, 0, _emptyMaterial, false, vec3(0.0));
@@ -281,13 +282,13 @@ vec3 recursiveRayCast(vec3 orig, vec3 dir) {
 
 		if (data[i].depth != MAX_DEPTH - 1) {
 			vec3 reflected = normalize(reflect(data[i].dir, normal));
-			vec3 refracted = normalize(refract(data[i].dir, normal, 1.0 / 1.52));
+			vec3 refracted = normalize(refract(data[i].dir, normal, data[i].mat.refractiveRatio));
 
 			vec3 reflectedOrigin = hitpoint + normal * 1e-3 * sign(dot(reflected, normal));
 			vec3 refractedOrigin = hitpoint + normal * 1e-3 * sign(dot(refracted, normal));
 
 			data[2 * i] = FunData(2 * i, reflectedOrigin, reflected, data[i].depth + 1, _emptyMaterial, false, vec3(0.0));
-			data[2 * i + 1] = FunData(2 * i + 1, refractedOrigin, refracted, data[i].depth + 1, _emptyMaterial, false, vec3(0.0));
+			data[2 * i + 1] = FunData(2 * i + 1, refractedOrigin, -refracted, data[i].depth + 1, _emptyMaterial, false, vec3(0.0));
 			push(s, 2 * i);
 			push(s, 2 * i + 1);
 		}
@@ -301,34 +302,53 @@ vec3 recursiveRayCast(vec3 orig, vec3 dir) {
 void main() {
 	// Scene set-up
 
-	Material green = Material(vec3(0, 1, 0), 0.4, 0.7, 16);
+	Material ivory = Material(vec3(255, 255, 240) / 255., 0.1, 0.0, 50.0, 1.0);
 
 	Sphere s1;
-	s1.center = vec3(1, 1, -10);
+	s1.center = vec3(-3, 0, -16);
 	s1.radius = 2;
-	s1.mat = green;
+	s1.mat = ivory;
 	spheres[0] = s1;
 
-	Material red = Material(vec3(0, 0, 0), 0.5, 0.0, 1);
+	Material glass = Material(vec3(0.3, 0.3, 0.3), 0.1, 0.8, 125, 1.0 / 1.5);
 	Sphere s2;
-	s2.center = vec3(0, 2, -5);
-	s2.radius = 1;
-	s2.mat = red;
+	s2.center = vec3(-1.0, -1.5, -12);
+	s2.radius = 2;
+	s2.mat = glass;
 	spheres[1] = s2;
 
-	Material glass = Material(vec3(0.9), 0.0, 0.0, 12);
-	Plane ground = Plane(vec3(0, -3, -5), vec3(0, 1, 0), 10, glass);
+	Material redRubber = Material(vec3(0.9, 0.1, 0.0), 0.0, 0.0, 10, 1.0);
+	Sphere s3;
+	s3.center = vec3(1.5, -0.5, -18);
+	s3.radius = 2;
+	s3.mat = redRubber;
+	spheres[2] = s3;
+
+	Material mirror = Material(vec3(0.0), 0.95, 0.0, 1425., 1.0);
+	Sphere s4;
+	s4.center = vec3(7, 5, -18);
+	s4.radius = 2;
+	s4.mat = mirror;
+	spheres[3] = s4;
+
+	Material groundMat = Material(vec3(248, 131, 121) / 255., 0.05, 0.03, 8., 0.9);
+	Plane ground = Plane(vec3(0, -4, -15), vec3(0, 1, 0), 15, groundMat);
 	planes[0] = ground;
 
 	Light l1;
-	l1.color = vec3(1.0);
-	l1.position = vec3(0.0);
+	l1.color = vec3(1.5);
+	l1.position = vec3(-20, 20, 20);
 	lights[0] = l1;
 
 	Light l2;
-	l2.color = vec3(1.0);
-	l2.position = vec3(0, 5, -5);
+	l2.color = vec3(1.8);
+	l2.position = vec3(30, 50, -25);
 	lights[1] = l2;
+
+	Light l3;
+	l3.color = vec3(1.7);
+	l3.position = vec3(30, 20, 30);
+	lights[2] = l3;
 
 	// ray casting
 
