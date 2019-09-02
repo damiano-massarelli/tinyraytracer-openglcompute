@@ -1,4 +1,4 @@
-tinyraytracer-openglcompute
+# tinyraytracer-openglcompute
 
 This toy ray tracer is based on [tinyraytracer](https://github.com/ssloy/tinyraytracer).
 
@@ -10,7 +10,7 @@ Just like the original version, it supports reflections and refractions but it i
 
 <img src="readme/img2.png" width="800">
 
-## Conclusions
+## How it works
 
 The original version of tinyraytracer is excellent and extremely easy to understand. However, being completely based on the CPU,
 it is quite slow.<br> On an `i7 7700 HQ` it took `2717 ms` to render a single frame (with multi-threading disabled). By using more
