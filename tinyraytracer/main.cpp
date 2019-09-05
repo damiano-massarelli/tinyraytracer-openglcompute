@@ -107,9 +107,22 @@ GLuint createCubeMap() {
 constexpr GLuint width = 1024;
 constexpr GLuint height = 768;
 
+constexpr GLuint groupSize = 16;
+
 int main(int argc, char* argv[])
 {
 	SDL_Window* window = initScreen(width, height);
+
+	int workGroupCount[3] = { 0 };
+	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 0, &workGroupCount[0]);
+	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 1, &workGroupCount[1]);
+	glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, 2, &workGroupCount[2]);
+	int maxInvocations;
+
+	glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &maxInvocations);
+
+	std::cout << "max ivoc " << maxInvocations << "\n";
+	std::cout << "max count " << workGroupCount[0] << " " << workGroupCount[1] << " " << workGroupCount[2] << "\n";
 
 	FreeCam cam{ glm::vec3{ 0.0 } };
 
@@ -162,7 +175,7 @@ int main(int argc, char* argv[])
 		glActiveTexture(GL_TEXTURE1);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, skybox);
 
-		glDispatchCompute(width / 16, height / 16, 1);
+		glDispatchCompute(width / groupSize, height / groupSize, 1);
 
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 		

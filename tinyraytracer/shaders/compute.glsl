@@ -151,6 +151,12 @@ bool hitPlane(Plane plane, vec3 orig, vec3 dir, out vec3 normal, out vec3 hitpoi
 
 	if (any(greaterThan(size2, vec2(plane.size)))) return false;
 
+	bool oddRow = int(round(size2.x / 3.0)) % 2 == 1;
+	bool oddCol = int(round(size2.y / 3.0)) % 2 == 1;
+
+	if (oddRow && !oddCol || !oddRow && oddCol) plane.mat.color = vec3(0.0);
+
+
 	normal = plane.normal;
 	mat = plane.mat;
 
@@ -331,7 +337,7 @@ void main() {
 	s4.mat = mirror;
 	spheres[3] = s4;
 
-	Material groundMat = Material(vec3(248, 131, 121) / 255., 0.05, 0.03, 8., 0.9);
+	Material groundMat = Material(vec3(0.5, 0.15, 0.0), 0.05, 0.03, 8., 0.9);
 	Plane ground = Plane(vec3(0, -4, -15), vec3(0, 1, 0), 15, groundMat);
 	planes[0] = ground;
 
@@ -361,6 +367,7 @@ void main() {
     // ray direction
 	vec3 d = vec3(0.0, 0.0, -1.0);
 	d.xy = 2.0 * (-0.5 + vec2(pixelCoords) / texSize) * tan(FOV / 2.0);
+	d.x *= float(texSize.x) / texSize.y;
 	d = cameraOrientation * normalize(d);
 
 	vec4 pixelColor = vec4(0.0, 0.0, 0.0, 1.0);

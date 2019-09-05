@@ -6,9 +6,9 @@ Just like the original version, it supports reflections and refractions but it i
 
 ## Some results
 
-<img src="readme/img1.png" width="800">
+<img src="readme/img1.png">
 
-<img src="readme/img2.png" width="800">
+<img src="readme/img2.png">
 
 ## How it works
 
@@ -17,7 +17,7 @@ it is quite slow.<br> On an `i7 7700 HQ` it took `2717 ms` to render a single fr
 threads the render time can be reduced by a factor of 8 (on this particular processor but I haven't tested it) which means almost 3 frames
 per second.
 
-The GPU implementation, on the other hand, can reach up until 50 fps on a `GTX 1050`. <br>
+The GPU implementation, on the other hand, can reach up to 50 fps on a `GTX 1050`. <br>
 The greatest difficulty faced while porting is the lack of recursion in GLSL.<br>
 In the original algorithm, when a ray hits a surface it is split in two more rays: the *reflected* ray and the *refracted* ray which will recursively
 undergo the same process if they hit another surface (until a certain threshold is reached).
